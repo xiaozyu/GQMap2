@@ -217,29 +217,29 @@
     .float-btn.disp-mode-2 { background: #0284c7; color: #fff; border-color: #fff; box-shadow: 0 0 10px #0284c7; }
     .float-btn.disp-mode-3 { background: #10b981; color: #fff; border-color: #fff; box-shadow: 0 0 10px #10b981; }
 
-    /* 左下角圖資微調器與狀態列 */
+    /* 左下角圖資微調器 (加大按鈕區塊，更好按) */
     #cad-calib-box {
       position: absolute; bottom: 16px; left: 10px; z-index: 900;
-      display: none; flex-direction: column; gap: 4px;
+      display: none; flex-direction: column; gap: 6px;
     }
     #cad-status-pill {
-      background: rgba(15, 23, 42, 0.92); border: 1px solid #eab308;
+      background: rgba(15, 23, 42, 0.95); border: 1px solid #eab308;
       color: #facc15; font-size: 11px; font-weight: bold; font-family: monospace;
-      padding: 4px 8px; border-radius: 6px; display: flex; align-items: center; gap: 6px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      padding: 6px 10px; border-radius: 8px; display: flex; align-items: center; gap: 8px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.6);
     }
     #cad-nudge-pad {
       background: rgba(15, 23, 42, 0.95); border: 1px solid #475569;
-      border-radius: 8px; padding: 6px; display: none; flex-direction: column;
-      align-items: center; gap: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+      border-radius: 10px; padding: 10px; display: none; flex-direction: column;
+      align-items: center; gap: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.7);
     }
-    .nudge-row { display: flex; gap: 4px; align-items: center; }
+    .nudge-row { display: flex; gap: 6px; align-items: center; }
     .nudge-btn {
       background: #1e293b; color: #fff; border: 1px solid #64748b;
-      border-radius: 4px; width: 32px; height: 28px; font-size: 12px;
+      border-radius: 6px; width: 38px; height: 34px; font-size: 14px;
       font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center;
     }
-    .nudge-btn:active { background: #3b82f6; }
+    .nudge-btn:active { background: #3b82f6; transform: scale(0.95); }
 
     #mapBanner {
       position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
@@ -427,16 +427,16 @@
       <span id="mapBannerText">📍 請在畫面上點選位置...</span>
     </div>
 
-    <!-- 左下角：台電圖資狀態與 1公尺微調器 -->
+    <!-- 左下角：放大好按的微調十字鍵 -->
     <div id="cad-calib-box">
       <div id="cad-nudge-pad">
-        <div style="font-size:10px;color:#94a3b8;font-weight:bold;">圖資偏移微調 (1m/格)</div>
+        <div style="font-size:11px;color:#94a3b8;font-weight:bold;">圖資微調 (1m/格)</div>
         <div class="nudge-row">
           <button class="nudge-btn" onclick="nudgeCadOverlay(0, 1)">▲</button>
         </div>
         <div class="nudge-row">
           <button class="nudge-btn" onclick="nudgeCadOverlay(-1, 0)">◀</button>
-          <button class="nudge-btn" style="width:42px;font-size:10px;background:#334155;" onclick="resetCadOffset()">歸零</button>
+          <button class="nudge-btn" style="width:46px;font-size:11px;background:#334155;" onclick="resetCadOffset()">歸零</button>
           <button class="nudge-btn" onclick="nudgeCadOverlay(1, 0)">▶</button>
         </div>
         <div class="nudge-row">
@@ -446,7 +446,7 @@
       </div>
       <div id="cad-status-pill">
         <span id="cad-status-text">⚡ 圖資準備中...</span>
-        <button onclick="toggleNudgePad()" style="background:#334155;border:1px solid #64748b;color:#fff;border-radius:4px;padding:2px 6px;font-size:10px;cursor:pointer;">⚙️校準</button>
+        <button onclick="toggleNudgePad()" style="background:#334155;border:1px solid #64748b;color:#fff;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">⚙️校準</button>
       </div>
     </div>
 
@@ -493,7 +493,6 @@
   <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-    // 圖資存放根目錄 (對應 GitHub 上的資料夾名稱)
     const PDF_BASE_FOLDER = './115年圖資';
     const PDF_RENDER_SCALE = 3.0;
 
@@ -800,11 +799,7 @@
     const routeLayer = L.layerGroup().addTo(map);
     let currentRoutingToken = 0;
 
-    // ==========================================
-    // 1. 三階段顯示切換 (1:僅工單 2:加顯示預設 3:全文字消失只留圖釘)
-    // ==========================================
     let displayStage = 1;
-
     window.cycleDisplayMode = () => {
       displayStage = (displayStage % 3) + 1;
       applyDisplayMode();
@@ -816,20 +811,17 @@
       btn.classList.remove('disp-mode-1', 'disp-mode-2', 'disp-mode-3');
 
       if (displayStage === 1) {
-        // 階段 1：只顯示匯入工單 (含文字框)
         btn.classList.add('disp-mode-1');
         btn.innerText = '🎯';
         map.removeLayer(baseLayer);
         mapEl.classList.remove('hide-all-case-labels');
       } else if (displayStage === 2) {
-        // 階段 2：加顯示預設據點 (服務所+休息點)
         btn.classList.add('disp-mode-2');
         btn.innerText = '👁️';
         reloadBaseMarkers();
         map.addLayer(baseLayer);
         mapEl.classList.remove('hide-all-case-labels');
       } else if (displayStage === 3) {
-        // 階段 3：全文字消失，只留工單圖釘 (看圖專用)
         btn.classList.add('disp-mode-3');
         btn.innerText = '📍';
         map.removeLayer(baseLayer);
@@ -837,12 +829,9 @@
       }
     }
 
-    // ==========================================
-    // 2. 台電 PDF 圖資裁切、去白底與四周無縫拼接引擎
-    // ==========================================
     let isCadOverlayEnabled = false;
     let cachedInnerCrop = null;
-    const loadedCadTiles = new Map(); // mapId -> { dataUrl, zone, x800, y500, overlay }
+    const loadedCadTiles = new Map();
     const loadingCadSet = new Set();
 
     let cadOffset = JSON.parse(localStorage.getItem('tpc_cad_offset_m') || '{"dx":0,"dy":0}');
@@ -874,10 +863,11 @@
 
     function computeTileBounds(zone, x800, y500) {
       const [baseX, baseY] = BASE_COORDS[zone] || BASE_COORDS['G'];
-      const swX = baseX + x800 * 800 + cadOffset.dx;
-      const swY = baseY + y500 * 500 + cadOffset.dy;
-      const neX = swX + 800;
-      const neY = swY + 500;
+      // 微幅外展 1 公尺以蓋掉拼接白縫
+      const swX = baseX + x800 * 800 + cadOffset.dx - 1;
+      const swY = baseY + y500 * 500 + cadOffset.dy - 1;
+      const neX = swX + 802;
+      const neY = swY + 502;
       const sw = twd67ToWGS84(swX, swY);
       const ne = twd67ToWGS84(neX, neY);
       return [[sw.lat, sw.lng], [ne.lat, ne.lng]];
@@ -973,15 +963,13 @@
       const cropCtx = cropCanvas.getContext('2d', { willReadFrequently: true });
       cropCtx.drawImage(offCanvas, cachedInnerCrop.x, cachedInnerCrop.y, W, H, 0, 0, W, H);
 
-      // 去白底並強化純黑線條
       const imgData = cropCtx.getImageData(0, 0, W, H);
       const d = imgData.data;
       for (let i = 0; i < d.length; i += 4) {
         const r = d[i], g = d[i+1], b = d[i+2];
         if (r > 215 && g > 215 && b > 215) {
-          d[i+3] = 0; // 白底變全透明
+          d[i+3] = 0;
         } else {
-          // 保留高對比純黑線條
           d[i] = 0;
           d[i+1] = 0;
           d[i+2] = 0;
@@ -992,7 +980,6 @@
       return cropCanvas.toDataURL('image/png');
     }
 
-    // 自動計算目前螢幕可視範圍內涵蓋的所有台電圖號，並一次載入拼接
     async function loadVisibleCadTiles() {
       if (!isCadOverlayEnabled || map.getZoom() < 16) return;
 
@@ -1011,7 +998,6 @@
       const pad2 = (n) => String(Math.max(0, n)).padStart(2, '0');
       const neededMaps = [];
 
-      // 優先載入畫面正中心那張，再載入四周相鄰圖號
       const center = map.getCenter();
       const centerMapId = coordToPowerCode(center.lat, center.lng).substring(0, 5);
       neededMaps.push(centerMapId);
@@ -1025,7 +1011,6 @@
         }
       }
 
-      // 依序載入所有出現在螢幕範圍內的圖資
       for (const mapId of neededMaps) {
         if (!isCadOverlayEnabled) break;
         await ensureCadTileLoaded(mapId);
@@ -1056,10 +1041,10 @@
         const y500 = parseInt(mapId.substring(3, 5), 10);
         const bounds = computeTileBounds(zone, x800, y500);
 
-        const overlay = L.imageOverlay(dataUrl, bounds, { opacity: 0.92, interactive: false }).addTo(cadOverlayLayer);
+        // 設定 opacity: 0.9 讓圖資與底圖交疊時更柔和
+        const overlay = L.imageOverlay(dataUrl, bounds, { opacity: 0.9, interactive: false }).addTo(cadOverlayLayer);
 
-        // 提高快取上限到 12 張（足以完整涵蓋 3x3 九宮格無縫拼接）
-        if (loadedCadTiles.size >= 12) {
+        if (loadedCadTiles.size >= 14) {
           const oldestKey = loadedCadTiles.keys().next().value;
           const oldest = loadedCadTiles.get(oldestKey);
           if (oldest && oldest.overlay) cadOverlayLayer.removeLayer(oldest.overlay);
@@ -1072,7 +1057,6 @@
           statusText.innerText = `⚡ 已疊加 (${activeKeys.length}張): ${activeKeys.slice(-4).join(', ')}`;
         }
       } catch (err) {
-        // 若該區無圖資（如海面或未涵蓋區），記錄為空避免重複發請求
         loadedCadTiles.set(mapId, { overlay: null });
       } finally {
         loadingCadSet.delete(mapId);
@@ -1098,7 +1082,6 @@
       }
     };
 
-    // 地圖滑動或縮放停止時，自動把螢幕四周出現的相鄰圖號全部補滿
     map.on('moveend', () => {
       loadVisibleCadTiles();
     });
