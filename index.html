@@ -212,12 +212,10 @@
     .float-btn.sort-mode-active { background: #dc2626; color: #fff; border-color: #fff; box-shadow: 0 0 12px #dc2626; }
     .float-btn.cad-mode-active { background: #eab308; color: #000; border-color: #fff; box-shadow: 0 0 12px #eab308; }
     
-    /* 三階段顯示按鈕樣式 */
     .float-btn.disp-mode-1 { background: #f59e0b; color: #000; border-color: #fff; box-shadow: 0 0 10px #f59e0b; }
     .float-btn.disp-mode-2 { background: #0284c7; color: #fff; border-color: #fff; box-shadow: 0 0 10px #0284c7; }
     .float-btn.disp-mode-3 { background: #10b981; color: #fff; border-color: #fff; box-shadow: 0 0 10px #10b981; }
 
-    /* 左下角圖資微調器 (加大按鈕區塊，更好按) */
     #cad-calib-box {
       position: absolute; bottom: 16px; left: 10px; z-index: 900;
       display: none; flex-direction: column; gap: 6px;
@@ -427,7 +425,7 @@
       <span id="mapBannerText">📍 請在畫面上點選位置...</span>
     </div>
 
-    <!-- 左下角：放大好按的微調十字鍵 -->
+    <!-- 左下角：微調十字鍵 -->
     <div id="cad-calib-box">
       <div id="cad-nudge-pad">
         <div style="font-size:11px;color:#94a3b8;font-weight:bold;">圖資微調 (1m/格)</div>
@@ -782,7 +780,7 @@
       { name: "清水服務所", lat: 24.269184, lng: 120.576343, type: "station", desc: "台電公務點", permanent: true },
       { name: "沙鹿服務所", lat: 24.230309, lng: 120.565418, type: "station", desc: "台電公務點", permanent: true },
       { name: "龍井服務所", lat: 24.193150, lng: 120.546019, type: "station", desc: "台電公務點", permanent: true },
-      { name: "南勢溪公園", lat: 24.215784, lng: 120.564731, type: "rest", desc: "午休點", permanent: true },
+      { name: "Nansi Creek Park", lat: 24.215784, lng: 120.564731, type: "rest", desc: "午休點", permanent: true },
       { name: "萬興陸橋", lat: 24.169068, lng: 120.535600, type: "rest", desc: "午休點", permanent: true },
       { name: "中華向上陸橋", lat: 24.217655, lng: 120.544649, type: "rest", desc: "午休點", permanent: true },
       { name: "沙田國三交叉", lat: 24.173208, lng: 120.543228, type: "rest", desc: "停駐點", permanent: true },
@@ -863,11 +861,10 @@
 
     function computeTileBounds(zone, x800, y500) {
       const [baseX, baseY] = BASE_COORDS[zone] || BASE_COORDS['G'];
-      // 微幅外展 1 公尺以蓋掉拼接白縫
-      const swX = baseX + x800 * 800 + cadOffset.dx - 1;
-      const swY = baseY + y500 * 500 + cadOffset.dy - 1;
-      const neX = swX + 802;
-      const neY = swY + 502;
+      const swX = baseX + x800 * 800 + cadOffset.dx - 2;
+      const swY = baseY + y500 * 500 + cadOffset.dy - 2;
+      const neX = swX + 804;
+      const neY = swY + 504;
       const sw = twd67ToWGS84(swX, swY);
       const ne = twd67ToWGS84(neX, neY);
       return [[sw.lat, sw.lng], [ne.lat, ne.lng]];
@@ -902,17 +899,21 @@
       for (let y = Math.floor(H * 0.02); y < H * 0.20; y++) {
         if (countH(y, W * 0.25, W * 0.75) > 0.65) { if (topLines.length === 0 || y - topLines[topLines.length - 1] > 6) topLines.push(y); }
       }
-      let top = topLines.length >= 2 ? topLines[1] : (topLines[0] ? topLines[0] + 15 : Math.floor(H * 0.046));
+      // 強制多往內切 25 像素，徹底濾掉台電 PDF 原生的外框與格線
+      let top = (topLines.length >= 2 ? topLines[1] : (topLines[0] ? topLines[0] + 15 : Math.floor(H * 0.046))) + 25;
+      
       let leftLines = [];
       for (let x = Math.floor(W * 0.015); x < W * 0.20; x++) {
         if (countV(x, H * 0.25, H * 0.65) > 0.65) { if (leftLines.length === 0 || x - leftLines[leftLines.length - 1] > 6) leftLines.push(x); }
       }
-      let left = leftLines.length >= 2 ? leftLines[1] : (leftLines[0] ? leftLines[0] + 15 : Math.floor(W * 0.047));
+      let left = (leftLines.length >= 2 ? leftLines[1] : (leftLines[0] ? leftLines[0] + 15 : Math.floor(W * 0.047))) + 25;
+
       let rightLines = [];
       for (let x = Math.floor(W * 0.985); x > W * 0.80; x--) {
         if (countV(x, H * 0.25, H * 0.65) > 0.65) { if (rightLines.length === 0 || rightLines[rightLines.length - 1] - x > 6) rightLines.push(x); }
       }
-      let right = rightLines.length >= 2 ? rightLines[1] : (rightLines[0] ? rightLines[0] - 15 : Math.floor(W * 0.953));
+      let right = (rightLines.length >= 2 ? rightLines[1] : (rightLines[0] ? rightLines[0] - 15 : Math.floor(W * 0.953))) - 25;
+
       const measuredW = right - left;
       const targetH = Math.round(measuredW * (500 / 800));
       return { x: left, y: top, w: measuredW, h: targetH };
@@ -1041,7 +1042,6 @@
         const y500 = parseInt(mapId.substring(3, 5), 10);
         const bounds = computeTileBounds(zone, x800, y500);
 
-        // 設定 opacity: 0.9 讓圖資與底圖交疊時更柔和
         const overlay = L.imageOverlay(dataUrl, bounds, { opacity: 0.9, interactive: false }).addTo(cadOverlayLayer);
 
         if (loadedCadTiles.size >= 14) {
