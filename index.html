@@ -838,7 +838,7 @@
     }
 
     // ==========================================
-    // 2. 台電 PDF 圖資裁切、去白底與疊加引擎 (移植自 GQCAD)
+    // 2. 台電 PDF 圖資裁切、去白底與四周無縫拼接引擎
     // ==========================================
     let isCadOverlayEnabled = false;
     let cachedInnerCrop = null;
@@ -929,10 +929,8 @@
     }
 
     async function fetchAndRenderPdfMap(mapId) {
-      // mapId 格式例如 G4153
       const zone = mapId[0];
       const xStr = mapId.substring(1, 3);
-      const yStr = mapId.substring(3, 5);
       const subFolder = `${zone}${xStr}XX`;
 
       const candidateUrls = [
@@ -994,6 +992,46 @@
       return cropCanvas.toDataURL('image/png');
     }
 
+    // 自動計算目前螢幕可視範圍內涵蓋的所有台電圖號，並一次載入拼接
+    async function loadVisibleCadTiles() {
+      if (!isCadOverlayEnabled || map.getZoom() < 16) return;
+
+      const b = map.getBounds();
+      const sw97 = wgs84ToTWD97(b.getSouth(), b.getWest());
+      const ne97 = wgs84ToTWD97(b.getNorth(), b.getEast());
+
+      const minX67 = sw97.x - 828, minY67 = sw97.y + 207;
+      const maxX67 = ne97.x - 828, maxY67 = ne97.y + 207;
+
+      const startX = Math.floor((minX67 - 170000) / 800);
+      const endX   = Math.floor((maxX67 - 170000) / 800);
+      const startY = Math.floor((minY67 - 2650000) / 500);
+      const endY   = Math.floor((maxY67 - 2650000) / 500);
+
+      const pad2 = (n) => String(Math.max(0, n)).padStart(2, '0');
+      const neededMaps = [];
+
+      // 優先載入畫面正中心那張，再載入四周相鄰圖號
+      const center = map.getCenter();
+      const centerMapId = coordToPowerCode(center.lat, center.lng).substring(0, 5);
+      neededMaps.push(centerMapId);
+
+      for (let x = startX; x <= endX; x++) {
+        for (let y = startY; y <= endY; y++) {
+          if (x >= 0 && x <= 99 && y >= 0 && y <= 99) {
+            const id = `G${pad2(x)}${pad2(y)}`;
+            if (!neededMaps.includes(id)) neededMaps.push(id);
+          }
+        }
+      }
+
+      // 依序載入所有出現在螢幕範圍內的圖資
+      for (const mapId of neededMaps) {
+        if (!isCadOverlayEnabled) break;
+        await ensureCadTileLoaded(mapId);
+      }
+    }
+
     async function ensureCadTileLoaded(mapId) {
       if (!isCadOverlayEnabled || !mapId || mapId.length < 5) return;
       mapId = mapId.substring(0, 5).toUpperCase();
@@ -1001,16 +1039,15 @@
 
       if (loadedCadTiles.has(mapId)) {
         const existing = loadedCadTiles.get(mapId);
-        if (!cadOverlayLayer.hasLayer(existing.overlay)) {
+        if (existing.overlay && !cadOverlayLayer.hasLayer(existing.overlay)) {
           existing.overlay.addTo(cadOverlayLayer);
         }
-        if (statusText) statusText.innerText = `⚡ 已疊加: ${Array.from(loadedCadTiles.keys()).join(', ')}`;
         return;
       }
 
       if (loadingCadSet.has(mapId)) return;
       loadingCadSet.add(mapId);
-      if (statusText) statusText.innerText = `⏳ 載入圖資 ${mapId}.PDF...`;
+      if (statusText) statusText.innerText = `⏳ 拼接圖資 ${mapId}...`;
 
       try {
         const dataUrl = await fetchAndRenderPdfMap(mapId);
@@ -1021,8 +1058,8 @@
 
         const overlay = L.imageOverlay(dataUrl, bounds, { opacity: 0.92, interactive: false }).addTo(cadOverlayLayer);
 
-        // 限制最多保留 4 張圖層防手機記憶體爆滿
-        if (loadedCadTiles.size >= 4) {
+        // 提高快取上限到 12 張（足以完整涵蓋 3x3 九宮格無縫拼接）
+        if (loadedCadTiles.size >= 12) {
           const oldestKey = loadedCadTiles.keys().next().value;
           const oldest = loadedCadTiles.get(oldestKey);
           if (oldest && oldest.overlay) cadOverlayLayer.removeLayer(oldest.overlay);
@@ -1030,9 +1067,13 @@
         }
 
         loadedCadTiles.set(mapId, { dataUrl, zone, x800, y500, overlay });
-        if (statusText) statusText.innerText = `⚡ 已疊加: ${Array.from(loadedCadTiles.keys()).join(', ')}`;
+        if (statusText) {
+          const activeKeys = Array.from(loadedCadTiles.keys()).filter(k => loadedCadTiles.get(k).overlay);
+          statusText.innerText = `⚡ 已疊加 (${activeKeys.length}張): ${activeKeys.slice(-4).join(', ')}`;
+        }
       } catch (err) {
-        if (statusText) statusText.innerText = `❌ 無圖資: ${mapId}`;
+        // 若該區無圖資（如海面或未涵蓋區），記錄為空避免重複發請求
+        loadedCadTiles.set(mapId, { overlay: null });
       } finally {
         loadingCadSet.delete(mapId);
       }
@@ -1046,10 +1087,8 @@
       if (isCadOverlayEnabled) {
         btn.classList.add('cad-mode-active');
         calibBox.style.display = 'flex';
-        const center = map.getCenter();
         if (map.getZoom() < 17) map.setZoom(18);
-        const mapCode = coordToPowerCode(center.lat, center.lng).substring(0, 5);
-        ensureCadTileLoaded(mapCode);
+        loadVisibleCadTiles();
       } else {
         btn.classList.remove('cad-mode-active');
         calibBox.style.display = 'none';
@@ -1059,12 +1098,9 @@
       }
     };
 
-    // 地圖滑動停止時，若開啟圖資模式且夠近，自動補上畫面中心的台電圖資
+    // 地圖滑動或縮放停止時，自動把螢幕四周出現的相鄰圖號全部補滿
     map.on('moveend', () => {
-      if (!isCadOverlayEnabled || map.getZoom() < 16) return;
-      const center = map.getCenter();
-      const mapId = coordToPowerCode(center.lat, center.lng).substring(0, 5);
-      ensureCadTileLoaded(mapId);
+      loadVisibleCadTiles();
     });
 
     function getCasePinIcon(isSelected, isND) {
@@ -1291,7 +1327,6 @@
             marker.closePopup();
             handleTapSortClick(t);
           } else {
-            // 在階段3(隱藏標籤)點擊圖釘時，自動彈出Popup方便看工單資訊
             selectTask(idx, false, displayStage === 3);
           }
         });
@@ -1889,8 +1924,7 @@
             caseMarkers[idx].openPopup();
           }
           if (isCadOverlayEnabled) {
-            const mapId = (t.code && t.code !== '📍地址導航') ? t.code.substring(0, 5) : coordToPowerCode(wgs.lat, wgs.lng).substring(0, 5);
-            ensureCadTileLoaded(mapId);
+            loadVisibleCadTiles();
           }
         }
       } else if (cleanNote) {
@@ -1968,7 +2002,7 @@
       silentCopy(code);
 
       if (isCadOverlayEnabled) {
-        ensureCadTileLoaded(code.substring(0, 5));
+        loadVisibleCadTiles();
       }
 
       if (inspectMarker) map.removeLayer(inspectMarker);
